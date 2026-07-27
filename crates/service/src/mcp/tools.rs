@@ -39,7 +39,7 @@ fn group_ids_prop() -> Value {
     })
 }
 
-/// The full, ordered registry — one entry per `knowledge_*` dispatch method (34 total),
+/// The full, ordered registry — one entry per `knowledge_*` dispatch method (35 total),
 /// matching FR-004's scope table exactly.
 pub fn registry() -> Vec<ToolSpec> {
     vec![
@@ -314,6 +314,37 @@ pub fn registry() -> Vec<ToolSpec> {
                         "group_id": {"type": "string", "default": "liminis"}
                     },
                     "required": ["name", "episode_body"]
+                })
+            },
+        },
+        ToolSpec {
+            name: "knowledge_query_temporal",
+            description: "Query episodes within a time window. Returns episodes whose \
+                           created_at falls between start_time and end_time, newest first.",
+            scope: Scope::Read,
+            input_schema: || {
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "group_id": {
+                            "type": "string",
+                            "description": "Group ID to scope the query to (default: 'liminis')."
+                        },
+                        "start_time": {
+                            "type": "string",
+                            "description": "RFC-3339 start of time window (inclusive). \
+                                            Omit for unbounded start."
+                        },
+                        "end_time": {
+                            "type": "string",
+                            "description": "RFC-3339 end of time window (inclusive). \
+                                            Omit for unbounded end."
+                        },
+                        "max_results": {
+                            "type": "integer", "minimum": 1, "default": 20,
+                            "description": "Maximum number of episodes to return."
+                        }
+                    }
                 })
             },
         },
@@ -675,18 +706,18 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn registry_has_34_unique_tools() {
+    fn registry_has_35_unique_tools() {
         let r = registry();
-        assert_eq!(r.len(), 34);
+        assert_eq!(r.len(), 35);
         let names: HashSet<&str> = r.iter().map(|t| t.name).collect();
-        assert_eq!(names.len(), 34, "tool names must be unique");
+        assert_eq!(names.len(), 35, "tool names must be unique");
     }
 
     #[test]
     fn scope_bucket_sizes_match_fr_004_table() {
         let r = registry();
         let count = |s: Scope| r.iter().filter(|t| t.scope == s).count();
-        assert_eq!(count(Scope::Read), 14);
+        assert_eq!(count(Scope::Read), 15);
         assert_eq!(count(Scope::Write), 12);
         assert_eq!(count(Scope::Cypher), 1);
         assert_eq!(count(Scope::Admin), 7);

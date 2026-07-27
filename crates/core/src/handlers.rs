@@ -106,6 +106,7 @@ async fn handle(
         "knowledge_find_entities" => handle_find_entities(req, state).await,
         "knowledge_find_relationships" => handle_find_relationships(req, state).await,
         "knowledge_get_episodes" => handle_get_episodes(req, state).await,
+        "knowledge_query_temporal" => handle_query_temporal(req, state).await,
         "knowledge_delete_episode" => handle_delete_episode(req, state).await,
         "knowledge_get_nodes_by_group" => handle_get_nodes_by_group(req, state).await,
         "knowledge_get_edges_by_group" => handle_get_edges_by_group(req, state).await,
@@ -539,6 +540,29 @@ async fn handle_get_episodes(req: &IpcRequest, state: Arc<AppState>) -> Result<V
     let episodes = tokio::task::spawn_blocking(move || {
         let conn = db.connect()?;
         conn.retrieve_episodes(&group_id, last_n)
+    })
+    .await??;
+    drop(_guard);
+
+    let count = episodes.len();
+    Ok(json!({"episodes": episodes, "count": count}))
+}
+
+async fn handle_query_temporal(req: &IpcRequest, state: Arc<AppState>) -> Result<Value, Error> {
+    let p = &req.params;
+    let group_id = p["group_id"]
+        .as_str()
+        .unwrap_or(DEFAULT_GROUP_ID)
+        .to_string();
+    let start_time = p["start_time"].as_str().map(|s| s.to_string());
+    let end_time = p["end_time"].as_str().map(|s| s.to_string());
+    let max_results = p["max_results"].as_u64().unwrap_or(20) as usize;
+
+    let db = load_db(&state)?;
+    let _guard = state.write_lock.read().await;
+    let episodes = tokio::task::spawn_blocking(move || {
+        let conn = db.connect()?;
+        conn.retrieve_episodes_by_time_range(&group_id, start_time.as_deref(), end_time.as_deref(), max_results)
     })
     .await??;
     drop(_guard);

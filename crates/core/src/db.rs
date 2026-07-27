@@ -511,6 +511,50 @@ impl<'db> Conn<'db> {
         Ok(rows)
     }
 
+    /// Returns episodes within an optional time window, newest first.
+    ///
+    /// Both `start_time` and `end_time` are RFC-3339 strings. When either is `None` the
+    /// corresponding bound is omitted. Uses `timestamp()` wrapper for lbug TIMESTAMP
+    /// comparison since the params are not in `TIMESTAMP_PARAM_NAMES`.
+    pub fn retrieve_episodes_by_time_range(
+        &self,
+        group_id: &str,
+        start_time: Option<&str>,
+        end_time: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EpisodicRow>, Error> {
+        let result = self.query_params(
+            "MATCH (ep:Episodic) WHERE ep.group_id = $gid \
+             AND ($start_time IS NULL OR ep.created_at >= timestamp($start_time)) \
+             AND ($end_time IS NULL OR ep.created_at <= timestamp($end_time)) \
+             RETURN ep.uuid, ep.name, ep.group_id, ep.created_at, ep.source, \
+             ep.source_description, ep.content, ep.valid_at, ep.entity_edges \
+             ORDER BY ep.created_at DESC LIMIT $limit",
+            serde_json::json!({
+                "gid": group_id,
+                "start_time": start_time,
+                "end_time": end_time,
+                "limit": limit as i64,
+            }),
+        )?;
+        let mut rows = Vec::new();
+        for row in result {
+            rows.push(EpisodicRow {
+                uuid: value_as_string(&row[0]),
+                name: value_as_string(&row[1]),
+                group_id: value_as_string(&row[2]),
+                created_at: value_as_timestamp_str(&row[3]),
+                source: value_as_string(&row[4]),
+                source_description: value_as_string(&row[5]),
+                content: value_as_string(&row[6]),
+                valid_at: value_as_timestamp_str(&row[7]),
+                entity_edges: value_as_str_list(&row[8]),
+                ..Default::default()
+            });
+        }
+        Ok(rows)
+    }
+
     /// Deletes an Episodic node and all its connected edges.
     ///
     /// Only ever `DETACH DELETE`s `Episodic` nodes, never `Entity` nodes — so this never
